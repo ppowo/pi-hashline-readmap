@@ -51,12 +51,21 @@ const EDIT_DESC = readFileSync(new URL("../prompts/edit.md", import.meta.url), "
 // ─── Registration ───────────────────────────────────────────────────────
 
 export function registerEditTool(pi: ExtensionAPI): void {
-	pi.registerTool({
+	const ptc = {
+		callable: true,
+		enabled: true,
+		policy: "mutating" as const,
+		readOnly: false,
+		pythonName: "edit",
+		defaultExposure: "not-safe-by-default" as const,
+	};
+
+	const tool = {
 		name: "edit",
 		label: "Edit",
 		description: EDIT_DESC,
 		parameters: hashlineEditSchema,
-
+		ptc,
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			await ensureHashInit();
 			const parsed = params as HashlineParams;
@@ -261,5 +270,7 @@ export function registerEditTool(pi: ExtensionAPI): void {
 				},
 			};
 		},
-	});
+	} satisfies Parameters<ExtensionAPI["registerTool"]>[0] & { ptc: typeof ptc };
+
+	pi.registerTool(tool);
 }

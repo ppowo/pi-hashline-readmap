@@ -25,8 +25,25 @@ const READ_DESC = readFileSync(new URL("../prompts/read.md", import.meta.url), "
 	.replaceAll("{{DEFAULT_MAX_BYTES}}", formatSize(DEFAULT_MAX_BYTES))
 	.trim();
 
+interface ReadParams {
+	path: string;
+	offset?: number;
+	limit?: number;
+	symbol?: string;
+	map?: boolean;
+}
+
 export function registerReadTool(pi: ExtensionAPI): void {
-	pi.registerTool({
+	const ptc = {
+		callable: true,
+		enabled: true,
+		policy: "read-only" as const,
+		readOnly: true,
+		pythonName: "read",
+		defaultExposure: "safe-by-default" as const,
+	};
+
+	const tool = {
 		name: "read",
 		label: "Read",
 		description: READ_DESC,
@@ -37,15 +54,16 @@ export function registerReadTool(pi: ExtensionAPI): void {
 			symbol: Type.Optional(Type.String({ description: "Symbol to read (e.g., functionName or ClassName.methodName)" })),
 			map: Type.Optional(Type.Boolean({ description: "Append structural map to output (cannot combine with symbol)" })),
 		}),
-
+		ptc,
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			await ensureHashInit();
-			const rawPath = params.path.replace(/^@/, "");
+			const p = params as ReadParams;
+			const rawPath = p.path.replace(/^@/, "");
 			const absolutePath = resolveToCwd(rawPath, ctx.cwd);
 
 			throwIfAborted(signal);
 
-			if (params.symbol && (params.offset !== undefined || params.limit !== undefined)) {
+			if (p.symbol && (p.offset !== undefined || p.limit !== undefined)) {
 				return {
 					content: [{ type: "text", text: "Cannot combine symbol with offset/limit. Use one or the other." }],
 					isError: true,
@@ -53,7 +71,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
 				};
 			}
 
-			if (params.map && params.symbol) {
+			if (p.map && p.symbol) {
 				return {
 					content: [{ type: "text", text: "Cannot combine map with symbol. Use one or the other." }],
 					isError: true,
@@ -66,7 +84,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
 			const ext = rawPath.split(".").pop()?.toLowerCase() ?? "";
 			if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext)) {
 				const builtinRead = createReadTool(ctx.cwd);
-				return builtinRead.execute(_toolCallId, params, signal, _onUpdate);
+				return builtinRead.execute(_toolCallId, p, signal, _onUpdate);
 			}
 
 			throwIfAborted(signal);
@@ -110,35 +128,35 @@ export function registerReadTool(pi: ExtensionAPI): void {
 			const total = allLines.length;
 			const structuredWarnings: PtcWarning[] = [];
 
-			let startLine = params.offset ? Math.max(1, params.offset) : 1;
-			let endIdx = params.limit ? Math.min(startLine - 1 + params.limit, total) : total;
-			if (params.offset && startLine > total) {
+			let startLine = p.offset ? Math.max(1, p.offset) : 1;
+			let endIdx = p.limit ? Math.min(startLine - 1 + p.limit, total) : total;
+			if (p.offset && startLine > total) {
 				return {
-					content: [{ type: "text", text: `[offset ${params.offset} is past end of file (${total} lines)]` }],
+					content: [{ type: "text", text: `[offset ${p.offset} is past end of file (${total} lines)]` }],
 					isError: true,
 					details: {},
 				};
 			}
 			let symbolMatch: SymbolMatch | undefined;
 			let symbolWarning: string | undefined;
-			if (params.symbol) {
+			if (p.symbol) {
 				const fileMap = await getOrGenerateMap(absolutePath);
 				if (!fileMap) {
 					const extLabel = ext || "unknown";
 					symbolWarning = `[Warning: symbol lookup not available for .${extLabel} files — showing full file]\n\n`;
 				} else {
-					const lookup = findSymbol(fileMap, params.symbol);
+					const lookup = findSymbol(fileMap, p.symbol);
 					if (lookup.type === "ambiguous") {
 						const lines = lookup.candidates.map(
 							(c) => `- ${c.name} (${c.kind}) — lines ${c.startLine}-${c.endLine}`,
 						);
-						const hints = lookup.candidates.map((c) => `${params.symbol}@${c.startLine}`).join(" or ");
+						const hints = lookup.candidates.map((c) => `${p.symbol}@${c.startLine}`).join(" or ");
 						return {
 							content: [
 								{
 									type: "text",
 									text: [
-										`Symbol '${params.symbol}' is ambiguous.`,
+										`Symbol '${p.symbol}' is ambiguous.`,
 										"Matches:",
 										...lines,
 										`Use ${hints} to select by start line.`,
@@ -154,7 +172,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
 							.slice(0, 20)
 							.map((s) => s.name)
 							.join(", ");
-						symbolWarning = `[Warning: symbol '${params.symbol}' not found. Available symbols: ${available}]\n\n`;
+						symbolWarning = `[Warning: symbol '${p.symbol}' not found. Available symbols: ${available}]\n\n`;
 					}
 					if (lookup.type === "found") {
 						startLine = Math.max(1, lookup.symbol.startLine);
@@ -183,10 +201,10 @@ export function registerReadTool(pi: ExtensionAPI): void {
 				text += `\n\n[Showing lines ${startLine}-${endIdx} of ${total}. Use offset=${endIdx + 1} to continue.]`;
 			}
 
-			// Append structural map: on-demand (params.map) or auto on truncated full-file reads
+			// Append structural map: on-demand (p.map) or auto on truncated full-file reads
 			const shouldAppendMap =
-				!!params.map ||
-				(!!truncation.truncated && !params.offset && !params.limit && !symbolMatch);
+				!!p.map ||
+				(!!truncation.truncated && !p.offset && !p.limit && !symbolMatch);
 			let appendedMap = false;
 			let mapText: string | null = null;
 			if (shouldAppendMap) {
@@ -203,7 +221,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
 				}
 			}
 
-			if (params.symbol && symbolMatch) {
+			if (p.symbol && symbolMatch) {
 				const parentInfo = symbolMatch.parentName ? ` in ${symbolMatch.parentName}` : "";
 				text = `[Symbol: ${symbolMatch.name} (${symbolMatch.kind})${parentInfo}, lines ${symbolMatch.startLine}-${symbolMatch.endLine} of ${total}]\n\n${text}`;
 			}
@@ -243,7 +261,7 @@ const readOutput = buildReadOutput({
 	continuation: !truncation.truncated && endIdx < total ? { nextOffset: endIdx + 1 } : null,
 	symbol: symbolMatch
 		? {
-				query: params.symbol ?? symbolMatch.name,
+				query: p.symbol ?? symbolMatch.name,
 				name: symbolMatch.name,
 				kind: symbolMatch.kind,
 				parentName: symbolMatch.parentName,
@@ -252,7 +270,7 @@ const readOutput = buildReadOutput({
 			}
 		: null,
 	map: {
-		requested: !!params.map,
+		requested: !!p.map,
 		appended: appendedMap,
 		text: mapText,
 	},
@@ -266,5 +284,7 @@ return {
 	},
 };
 		},
-	});
+	} satisfies Parameters<ExtensionAPI["registerTool"]>[0] & { ptc: typeof ptc };
+
+	pi.registerTool(tool);
 }

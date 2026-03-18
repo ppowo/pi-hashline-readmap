@@ -25,28 +25,28 @@ export const HASHLINE_TOOL_PTC_POLICY: HashlineToolPtcPolicy = {
   tools: {
     read: {
       toolName: "read",
-      helperName: "hashline-read",
+      helperName: "read",
       overridesBuiltin: true,
       mutability: "read-only",
       defaultExposure: "safe-by-default",
     },
     grep: {
       toolName: "grep",
-      helperName: "hashline-grep",
+      helperName: "grep",
       overridesBuiltin: true,
       mutability: "read-only",
       defaultExposure: "safe-by-default",
     },
     sg: {
       toolName: "sg",
-      helperName: "hashline-sg",
+      helperName: "sg",
       overridesBuiltin: false,
       mutability: "read-only",
       defaultExposure: "opt-in",
     },
     edit: {
       toolName: "edit",
-      helperName: "hashline-edit",
+      helperName: "edit",
       overridesBuiltin: true,
       mutability: "mutating",
       defaultExposure: "not-safe-by-default",
