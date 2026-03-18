@@ -247,16 +247,26 @@ function escapeForRegex(s: string): string {
 }
 
 export function registerGrepTool(pi: ExtensionAPI): void {
-	pi.registerTool({
+	const ptc = {
+		callable: true,
+		enabled: true,
+		policy: "read-only" as const,
+		readOnly: true,
+		pythonName: "grep",
+		defaultExposure: "safe-by-default" as const,
+	};
+
+	const tool = {
 		name: "grep",
 		label: "grep",
 		description: GREP_DESC,
 		parameters: grepSchema,
-
+		ptc,
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			await ensureHashInit();
+			const p = params as GrepParams;
 			const builtin = createGrepTool(ctx.cwd);
-			const result = await builtin.execute(toolCallId, params, signal, onUpdate);
+			const result = await builtin.execute(toolCallId, p, signal, onUpdate);
 
 			const textBlock = result.content?.find(
 				(item): item is { type: "text"; text: string } =>
@@ -264,7 +274,7 @@ export function registerGrepTool(pi: ExtensionAPI): void {
 			);
 			if (!textBlock?.text) return result;
 
-			const { path: rawSearchPath } = params as GrepParams;
+			const { path: rawSearchPath } = p;
 			const searchPath = resolveToCwd(rawSearchPath || ".", ctx.cwd);
 
 			let searchPathIsDirectory = false;
@@ -280,7 +290,7 @@ export function registerGrepTool(pi: ExtensionAPI): void {
 				try {
 					const buf = await fsReadFile(searchPath);
 					if (looksLikeBinary(buf)) {
-						const warning = `[Warning: '${params.path ?? searchPath}' appears to be a binary file — grep skips binary files by default. Use a hex tool or the read tool to inspect it.]`;
+						const warning = `[Warning: '${p.path ?? searchPath}' appears to be a binary file — grep skips binary files by default. Use a hex tool or the read tool to inspect it.]`;
 						return {
 							...result,
 							content: result.content.map((item) =>
@@ -290,7 +300,7 @@ export function registerGrepTool(pi: ExtensionAPI): void {
 								...(typeof result.details === "object" && result.details !== null ? result.details : {}),
 								ptcValue: {
 									tool: "grep",
-									summary: !!params.summary,
+									summary: !!p.summary,
 									totalMatches: 0,
 									records: [],
 								},
@@ -357,7 +367,7 @@ export function registerGrepTool(pi: ExtensionAPI): void {
 				// parsed.kind === "match"; context lines are irrelevant here (rg won’t
 				// produce them for bare-CR files in any meaningful way).
 				if (parsed.kind === "match" && bareCRFiles.has(absolute)) {
-					const gp = params as GrepParams;
+					const gp = p;
 					const flags = gp.ignoreCase ? "i" : "";
 					let patternRe: RegExp | null = null;
 					try {
@@ -426,7 +436,7 @@ export function registerGrepTool(pi: ExtensionAPI): void {
 						hashlineWarning: warning,
 						ptcValue: {
 							tool: "grep",
-							summary: !!params.summary,
+							summary: !!p.summary,
 							totalMatches: 0,
 							records: [],
 						},
@@ -439,7 +449,7 @@ export function registerGrepTool(pi: ExtensionAPI): void {
 				file.lines = deduplicateContext(file.lines);
 			}
 			const truncatedIR = truncateGrepIR(grepIR);
-			const { summary, limit } = params as GrepParams;
+			const { summary, limit } = p;
 			const effectiveLimit = limit ?? 100;
 			const outputIR = summary
 				? {
@@ -492,5 +502,7 @@ return {
 	},
 };
 		},
-	});
+	} satisfies Parameters<ExtensionAPI["registerTool"]>[0] & { ptc: typeof ptc };
+
+	pi.registerTool(tool);
 }

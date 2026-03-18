@@ -68,7 +68,16 @@ function execFileText(
 }
 
 export function registerSgTool(pi: ExtensionAPI): void {
-  pi.registerTool({
+  const ptc = {
+    callable: true,
+    enabled: true,
+    policy: "read-only" as const,
+    readOnly: true,
+    pythonName: "sg",
+    defaultExposure: "opt-in" as const,
+  };
+
+  const tool = {
     name: "sg",
     label: "AST Grep",
     description: SG_DESC,
@@ -77,7 +86,7 @@ export function registerSgTool(pi: ExtensionAPI): void {
       lang: Type.Optional(Type.String({ description: "Language hint for ast-grep (e.g. 'typescript')" })),
       path: Type.Optional(Type.String({ description: "Directory or file to search (default: cwd)" })),
     }),
-
+    ptc,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       await ensureHashInit();
       const p = params as SgParams;
@@ -203,5 +212,7 @@ export function registerSgTool(pi: ExtensionAPI): void {
         };
       }
     },
-  });
+  } satisfies Parameters<ExtensionAPI["registerTool"]>[0] & { ptc: typeof ptc };
+
+  pi.registerTool(tool);
 }
