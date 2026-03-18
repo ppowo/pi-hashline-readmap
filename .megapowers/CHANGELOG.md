@@ -228,3 +228,14 @@ The original PR/branch history is still valid historical context, but #039 shoul
 ### Tests
 - pi-hashline-readmap: 87 files, 419 tests, 0 failures
 - pi-ptc-next: 70 tests, 0 failures (up from ~55)
+
+## Issue #057: Emit tool executors on EventBus for PTC — CLOSED ✅
+**Date**: 2026-03-18
+### Added
+- Each `register*Tool` function (read, edit, grep, sg) now returns the full `ToolDefinition` including `execute` (#057)
+- `index.ts` captures tool definitions, stashes on `globalThis.__hashlineToolExecutors`, and emits on `pi.events` channel `"hashline:tool-executors"` (#057)
+- Dual-path access: `globalThis` stash for sync load-order safety, EventBus emit for event-based consumers (#057)
+### Tests
+- 12 new tests across 2 test files (tool-executors.test.ts, tool-executor-emit.test.ts)
+- 3 existing test files updated with `events` mock
+- pi-hashline-readmap: 89 files, 432 tests, 0 failures

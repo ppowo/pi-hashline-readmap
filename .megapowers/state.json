@@ -43,8 +43,14 @@
     2
   ],
   "tddTaskState": null,
-  "doneActions": [],
-  "doneChecklistShown": false,
+  "doneActions": [
+    "generate-docs",
+    "write-changelog",
+    "capture-learnings",
+    "push-and-pr",
+    "close-issue"
+  ],
+  "doneChecklistShown": true,
   "megaEnabled": true,
   "branchName": "feat/057-emit-tool-executors-on-eventbus-for-ptc-",
   "baseBranch": "main"
