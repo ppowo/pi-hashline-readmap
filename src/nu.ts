@@ -277,7 +277,7 @@ export function registerNuTool(pi: ExtensionAPI): boolean {
       ),
     }),
 
-    async execute(toolCallId, params: { command: string; timeout?: number }, signal, onUpdate, ctx) {
+    async execute(_toolCallId, params: { command: string; timeout?: number }, signal, onUpdate, ctx) {
       const result = await executeNuScript({
         command: params.command,
         cwd: ctx.cwd,
