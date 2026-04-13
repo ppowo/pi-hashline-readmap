@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![npm](https://img.shields.io/npm/v/pi-hashline-readmap)](https://www.npmjs.com/package/pi-hashline-readmap)
 
-A drop-in [pi](https://github.com/mariozechner/pi-coding-agent) extension that upgrades the agent’s local coding workflow with hash-anchored reads and edits, structural file maps, symbol-aware navigation, structural search, and compressed `bash` output.
+A drop-in [pi](https://github.com/mariozechner/pi-coding-agent) extension that upgrades the agent's local coding workflow with hash-anchored reads and edits, structural file maps, symbol-aware navigation, structural search, agent-optimized file exploration, and compressed `bash` output.
 
-It replaces the stock `read`, `edit`, and `grep` tools, provides an enhanced `ast_search` tool, adds a `nu` tool for structured exploration via Nushell, and post-processes `bash` output so more context budget goes to useful information instead of noise.
+It replaces the stock `read`, `edit`, `grep`, `ls`, and `find` tools, provides an enhanced `ast_search` tool, adds a `nu` tool for structured exploration via Nushell, and post-processes `bash` output so more context budget goes to useful information instead of noise.
 
 ## Why install this?
 
@@ -59,6 +59,8 @@ This package is a good fit when you want pi to:
 - search within enclosing symbols instead of only matching lines
 - inspect a symbol together with nearby same-file support code
 - run tests or builds without flooding the model context with irrelevant output
+- explore directory structure with sorted, dirs-first listings
+- find files recursively with gitignore-aware, depth-limited discovery
 
 ## What this package includes
 
@@ -148,6 +150,26 @@ The `nu` tool's prompt advertises several optional Nushell plugins that enhance 
 
 These plugins are **not bundled** — they must be installed separately. See [Optional Nushell plugins](#optional-nushell-plugins) below.
 
+## `ls`
+Agent-optimized single-directory listing. Shows directories first (with `/` suffix), then files, sorted alphabetically (case-insensitive). Always includes dotfiles.
+
+- `path` — directory to list (default: cwd)
+- `limit` — max entries (default: 500)
+- `glob` — filter entries by pattern (e.g. `'*.ts'`)
+
+Returns structured `ptcValue` with `{ tool, path, totalEntries, truncated, entries[] }`. Output is bounded by both entry count and a 50 KB byte budget.
+
+## `find`
+Recursive file discovery optimized for agents. Uses [`fd`](https://github.com/sharkdp/fd) when available for speed, falls back to pure Node.js. Respects `.gitignore` (including nested), always includes hidden files.
+
+- `pattern` — glob pattern (**required**, e.g. `'*.ts'`)
+- `path` — search directory (default: cwd)
+- `limit` — max entries (default: 1000)
+- `type` — `"file"` | `"dir"` | `"any"` (default: `"file"`)
+- `maxDepth` — maximum directory depth
+
+Returns sorted relative paths with forward slashes and structured `ptcValue`. Output bounded by entry count and 50 KB byte budget.
+
 ## Quick Start
 
 ### Install from npm
@@ -164,6 +186,7 @@ pi install git:github.com/coctostan/pi-hashline-readmap
 ```bash
 brew install nushell           # required for nu tool
 brew install ast-grep          # required for ast_search
+brew install fd                # optional, speeds up find tool
 brew install difftastic        # optional, improves semantic edit summaries
 brew install shellcheck yq scc # optional, improves some bash output compression flows
 ```
@@ -386,6 +409,18 @@ The same executors are also exposed at `globalThis.__hashlineToolExecutors`.
 - `lang`
 - `path`
 
+## `ls` parameters
+- `path` — directory to list
+- `limit` — max entries
+- `glob` — filter entries by pattern
+
+## `find` parameters
+- `pattern` — glob pattern (required)
+- `path` — search directory
+- `limit` — max entries
+- `type` — entry type filter (`"file"`, `"dir"`, `"any"`)
+- `maxDepth` — max directory depth
+
 ## Project Structure
 ```text
 index.ts                  # extension entry point
@@ -404,6 +439,8 @@ src/
   grep-render-helpers.ts  # grep TUI rendering helpers
   sg.ts                   # ast-grep wrapper
   sg-output.ts            # sg output builder
+  ls.ts                   # ls tool implementation
+  find.ts                 # find tool implementation
   hashline.ts             # LINE:HASH generation
   map-cache.ts            # mtime-keyed structural map cache
   ptc-value.ts            # shared structured output builders
@@ -428,8 +465,8 @@ npm run typecheck
 ```
 
 As of the current repository state, the suite passes with:
-- **125** test files
-- **668** tests
+- **150** test files
+- **747** tests
 
 ### Local development notes
 This repository is intended to be used as a pi extension workspace. In local development, changes can take effect immediately when the extension is installed from the local checkout.
@@ -456,6 +493,7 @@ Install `pi-hashline-readmap` if you want pi to be stronger at:
 - symbol-oriented inspection instead of blind scrolling
 - search-to-edit workflows
 - structured code search
+- agent-friendly file exploration with dirs-first listing and recursive discovery
 - keeping shell output compact enough for model context windows
 
 Skip it if your main need is repo-wide dependency analysis, impact graphs, runtime traces, or broader workflow orchestration. This package is intentionally focused on local file and symbol workflows.
